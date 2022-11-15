@@ -319,7 +319,7 @@ def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
 
     try:
         _ = target_page.data_item()
-    except NoPageError as exception:
+    except NoPageError:
         return False
 
     return True
@@ -445,7 +445,13 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
-        if target_exists(item, dbname):
+        try:
+            check_target_exists = target_exists(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if check_target_exists:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target does exist, expect non-exist) ')
             continue
 
@@ -487,7 +493,13 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
-        if not target_exists(item, dbname):
+        try:
+            check_target_exists = target_exists(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if not check_target_exists:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target does not exist, expect exist) ')
             continue
 
@@ -526,7 +538,13 @@ def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=Non
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
-        if not target_exists(item, dbname):
+        try:
+            check_target_exists = target_exists(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if not check_target_exists:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target does not exist, expect exist) ')
             continue
 
