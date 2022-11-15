@@ -35,6 +35,27 @@ PROCESS_INEXISTENT_TARGETS = False
 PROCESS_UNCONNECTED_TARGETS = False
 SIMULATE = True
 
+FAMILY_SHORTCUTS = {
+    'commons' : 'c',
+    'mediawiki' : 'mw',
+    'meta' : 'm',
+    'species' : 'species',
+    'wikibooks' : 'b',
+    'wikidata' : 'd',
+    'wikimania' : 'wikimania',
+    'wikimedia' : 'wmf',
+    'wikinews' : 'n',
+    'wikipedia' : 'w',
+    'wikiquote' : 'q',
+    'wikisource' : 's',
+    'wikiversity' : 'v',
+    'wikivoyage' : 'voy',
+    'wiktionary' : 'wikt',
+}
+SITELINK_MAPPER = {
+    'be_x_oldwiki' : 'be-tarask'
+}
+
 
 class Replica:
     def __init__(self, database:str):
@@ -272,7 +293,7 @@ def filter_non_redirects_with_badges(df:pd.DataFrame) -> pd.DataFrame:  # in ord
 
 
 def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
@@ -283,7 +304,7 @@ def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
 
 
 def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
@@ -302,7 +323,7 @@ def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
 
 
 def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
@@ -329,7 +350,7 @@ def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
@@ -340,7 +361,7 @@ def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
 
 
 def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
@@ -356,7 +377,7 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink for {dbname} found in {item.title()}')
 
@@ -369,7 +390,7 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
     ]
     new_sitelink = pwb.SiteLink(
         sitelink.canonical_title(),
-        site=dbname,
+        site=SITELINK_MAPPER.get(dbname, dbname),
         badges=new_badges
     )
 
@@ -389,7 +410,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
-    sitelink = item.sitelinks.get(dbname)
+    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink for {dbname} found in {item.title()}')
 
@@ -399,7 +420,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
 
     new_sitelink = pwb.SiteLink(
         sitelink.canonical_title(),
-        site=dbname,
+        site=SITELINK_MAPPER.get(dbname, dbname),
         badges=new_badges
     )
 
@@ -418,7 +439,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
 def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
     if SIMULATE is not True:
         item.removeSitelink(
-            dbname,
+            SITELINK_MAPPER.get(dbname, dbname),
             summary=f'{edit_summary}{EDIT_SUMMARY_APPENDIX}'
         )
 
@@ -632,10 +653,31 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
     if df.shape[0] == 0:
         return
 
+    redirect_site = pwb.Site(dbname)
+    redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w")}:{redirect_site.code}:'
+
     with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
         for elem in df.itertuples():
+            item = pwb.ItemPage(REPO, elem.redirect_qid)
+            try:
+                item.get()
+            except NoPageError:
+                LOG.info(f'Skip {elem.redirect_qid} (item page does not exist)')
+                continue
+            except IsRedirectPageError as exception:
+                LOG.info(f'Skip {item.title()} (item page is a redirect)')
+                continue
+
+            if elem.target_interwiki is not None:
+                target_interwiki_prefix = f'{redirect_interwiki_prefix}{elem.target_interwiki}:'
+            else:
+                target_interwiki_prefix = redirect_interwiki_prefix
+
             file_handle.write('|-\n')
-            file_handle.write(f'| {{{{Q|{elem.redirect_qid}}}}} || {dbname} || {elem.redirect_title} || {elem.target_title}\n')
+            file_handle.write(f'| {{{{Q|{elem.redirect_qid}}}}}\n')
+            file_handle.write(f'| {dbname}\n')
+            file_handle.write(f'| [[{redirect_interwiki_prefix}{elem.redirect_title}|{elem.redirect_title.replace("_", " ")}]]\n')
+            file_handle.write(f'| [[{target_interwiki_prefix}{elem.target_title}|{elem.target_title.replace("_", " ")}]]\n')
 
     LOG.info(f'Added unconnected target cases to report for {dbname} ({df.shape[0]} entries)')
 
