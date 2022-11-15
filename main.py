@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 import pandas as pd
 import pywikibot as pwb
+from pywikibot.exceptions import OtherPageSaveError
 import requests
 import mariadb
 
@@ -383,11 +384,14 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
     )
 
     if SIMULATE is not True:
-        item.setSitelink(
-            new_sitelink,
-            summary=f'{edit_summary}{EDIT_SUMMARY_APPENDIX}'
-        )
-    
+        try:
+            item.setSitelink(
+                new_sitelink,
+                summary=f'{edit_summary}{EDIT_SUMMARY_APPENDIX}'
+            )
+        except OtherPageSaveError as exception:
+            raise RuntimeWarning(f'Cannot remove {dbname} sitelink badge in {item.title()}') from exception
+
     LOG.info(f'Removed badge {qid_badge} from {dbname} sitelink in {item.title()}')
 
 
