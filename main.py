@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import pandas as pd
 import pywikibot as pwb
-from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError
+from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError
 import requests
 import mariadb
 
@@ -293,7 +293,10 @@ def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
     if not local_page.isRedirectPage():
         raise RuntimeWarning(f'Cannot determine target of non-redirect page for {dbname} sitelink in {item.title()}')
 
-    target_page = local_page.getRedirectTarget()
+    try:
+        target_page = local_page.getRedirectTarget()
+    except CircularRedirectError as exception:
+        raise RuntimeWarning(f'Circular redirect detected for {dbname} sitelink in {item.title()}') from exception
 
     return target_page.exists()
 
