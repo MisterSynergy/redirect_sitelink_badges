@@ -365,16 +365,19 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
         pwb.ItemPage(REPO, qid_badge)
     ]
     new_sitelink = pwb.SiteLink(
-        sitelink.title,
+        sitelink.canonical_title(),
         site=dbname,
         badges=new_badges
     )
 
     if SIMULATE is not True:
-        item.setSitelink(
-            new_sitelink,
-            summary=f'{edit_summary}{EDIT_SUMMARY_APPENDIX}'
-        )
+        try:
+            item.setSitelink(
+                new_sitelink,
+                summary=f'{edit_summary}{EDIT_SUMMARY_APPENDIX}'
+            )
+        except OtherPageSaveError as exception:
+            raise RuntimeWarning(f'Cannot add {dbname} sitelink badge in {item.title()}') from exception
 
     LOG.info(f'Added badge {qid_badge} to {dbname} sitelink in {item.title()}')
 
@@ -392,7 +395,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
         raise RuntimeWarning(f'Badge to remove {qid_badge} not found on {dbname} sitelink in {item.title()}')
 
     new_sitelink = pwb.SiteLink(
-        sitelink.title,
+        sitelink.canonical_title(),
         site=dbname,
         badges=new_badges
     )
@@ -685,7 +688,7 @@ def process_project(project:dict[str, str]) -> None:
         'cnt_redirects_with_unconnected_target' : redirects_with_unconnected_target.shape[0]
     }
 
-    log_cases_to_tsv_file(all_redirects, project.get('dbname'))
+    log_cases_to_tsv_file(all_redirects, project.get('db_name'))
     log_project_stats(payload=project_stats, dbname=project.get('db_name'))
     LOG.info(f'{project.get("db_name"): <20}: {all_redirects.shape[0]:6d} redirects;' \
           f' {redirects_with_any_badge.shape[0]:6d} w/ any badge;' \
