@@ -293,7 +293,7 @@ def filter_non_redirects_with_badges(df:pd.DataFrame) -> pd.DataFrame:  # in ord
 
 
 def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
@@ -304,7 +304,7 @@ def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
 
 
 def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
@@ -323,7 +323,7 @@ def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
 
 
 def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
@@ -350,7 +350,7 @@ def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
@@ -361,7 +361,7 @@ def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
 
 
 def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
@@ -377,7 +377,7 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink for {dbname} found in {item.title()}')
 
@@ -410,7 +410,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
-    sitelink = item.sitelinks.get(SITELINK_MAPPER.get(dbname, dbname))
+    sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink for {dbname} found in {item.title()}')
 
