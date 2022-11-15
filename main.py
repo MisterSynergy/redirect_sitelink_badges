@@ -646,14 +646,16 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
 
 
-def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
+def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[str]=None, url:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning('No valid dbname received in write_unconnected_redirect_target_report')
+    if url is None:
+        raise RuntimeWarning('No valid url received in write_unconnected_redirect_target_report')
 
     if df.shape[0] == 0:
         return
 
-    redirect_site = pwb.Site(dbname)
+    redirect_site = pwb.Site(url=url)
     redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w")}:{redirect_site.code}:'
 
     with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
@@ -805,7 +807,8 @@ def process_project(project:dict[str, str]) -> None:
     if PROCESS_UNCONNECTED_TARGETS is True:
         write_unconnected_redirect_target_report(
             redirects_with_unconnected_target,
-            project.get('db_name')
+            project.get('db_name'),
+            project.get('url')
         )
 
 
