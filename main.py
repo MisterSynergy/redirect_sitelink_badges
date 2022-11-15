@@ -423,7 +423,7 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
     if dbname is None:
         return
     
-    filt = df['redirect_id'].notna() & df['target_id'].isna()
+    filt = df['redirect_id'].notna() & df['target_id'].isna() & df['target_interwiki'].isna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
         item.get()
