@@ -656,7 +656,7 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
         return
 
     redirect_site = pwb.Site(url=url)
-    redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w")}:{redirect_site.code}:'
+    redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w")}:{redirect_site.lang}:'
 
     with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
         for elem in df.itertuples():
@@ -670,7 +670,7 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
                 LOG.info(f'Skip {item.title()} (item page is a redirect)')
                 continue
 
-            if elem.target_interwiki is not None:
+            if elem.target_interwiki!='':
                 target_interwiki_prefix = f'{redirect_interwiki_prefix}{elem.target_interwiki}:'
             else:
                 target_interwiki_prefix = redirect_interwiki_prefix
