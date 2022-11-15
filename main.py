@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import pandas as pd
 import pywikibot as pwb
-from pywikibot.exceptions import OtherPageSaveError
+from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError
 import requests
 import mariadb
 
@@ -100,7 +100,22 @@ def query_wdqs_to_dataframe(query:str, columns:dict[str, Any]) -> pd.DataFrame:
     return df
 
 
-def redirect_pages_linked_to_wikidata_item(database:str='enwiki') -> pd.DataFrame:    
+def clear_logfiles() -> None:
+    for logfile in [ './output/cases.tsv', './output/project_stats.tsv', './output/unconnected_wikitable_body.txt' ]:
+        open(logfile, mode='w', encoding='utf8').write('')
+
+
+def query_database_names() -> list[dict[str, str]]:
+    # as in https://quarry.wmcloud.org/query/12744
+    query = """SELECT dbname, url FROM wiki WHERE is_closed=0 AND has_wikidata=1"""
+    db_names = []
+    for row in query_mediawiki('meta', query):
+        db_names.append({'db_name' : row['dbname'], 'url' : row['url']})
+
+    return db_names
+
+
+def query_redirect_pages_linked_to_wikidata_item(database:str='enwiki') -> pd.DataFrame:    
     query = """SELECT
   redirect_page.page_id AS redirect_id,
   redirect_page.page_namespace AS redirect_namespace,
@@ -138,7 +153,7 @@ WHERE
             ]
         )
     return df
-    
+
 
 def query_redirect_badges(url:str) -> pd.DataFrame:
     wd = 'http://www.wikidata.org/entity/'
@@ -173,7 +188,7 @@ def make_master_df(database:Optional[str]=None, url:Optional[str]=None) -> pd.Da
     if database is None or url is None:
         raise RuntimeWarning('Cannot make master dataframe due to incomplete args')
 
-    redirect_items = redirect_pages_linked_to_wikidata_item(database)
+    redirect_items = query_redirect_pages_linked_to_wikidata_item(database)
     current_badges = query_redirect_badges(url)
 
     df = redirect_items.merge(
@@ -256,21 +271,6 @@ def filter_non_redirects_with_badges(df:pd.DataFrame) -> pd.DataFrame:  # in ord
     return df.loc[filt]
 
 
-def query_database_names() -> list[dict[str, str]]:
-    # as in https://quarry.wmcloud.org/query/12744
-    query = """SELECT dbname, url FROM wiki WHERE is_closed=0 AND has_wikidata=1"""
-    db_names = []
-    for row in query_mediawiki('meta', query):
-        db_names.append({'db_name' : row['dbname'], 'url' : row['url']})
-
-    return db_names
-
-
-def clear_logfiles() -> None:
-    for logfile in [ './output/cases.tsv', './output/project_stats.tsv', './output/unconnected_wikitable_body.txt' ]:
-        open(logfile, mode='w', encoding='utf8').write('')
-
-
 def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
     sitelink = item.sitelinks.get(dbname)
     
@@ -316,7 +316,7 @@ def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
     
     try:
         _ = target_page.data_item()
-    except pwb.exceptions.NoPageError as exception:
+    except NoPageError as exception:
         return False
 
     return True
@@ -421,17 +421,23 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
 
 def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
-        return
+        raise RuntimeWarning('No valid dbname received to process redirects with inexistent targets')
     
     filt = df['redirect_id'].notna() & df['target_id'].isna() & df['target_interwiki'].isna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
-        item.get()
-
+        try:
+            item.get()
+        except IsRedirectPageError:
+            LOG.info(f'Skip {item.title()} (item page is a redirect)')
+            continue
+        
         if not is_redirect_page(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
         if target_exists(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target does exist, expect non-exist) ')
             continue
 
         if get_page_len(item, dbname) > REDIRECT_LENGTH_CUTOFF:
@@ -442,8 +448,8 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
                     QID_S2R,
                     f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details'
                 )
-            except RuntimeWarning:
-                pass
+            except RuntimeWarning as exception:
+                LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
         else:
             remove_sitelink(
                 item,
@@ -454,20 +460,27 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
 
 def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
-        return
+        raise RuntimeWarning('No valid dbname received to process redirects without bagdes')
 
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].notna() & df['s2r_badge'].isna() & df['i2r_badge'].isna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
-        item.get()
+        try:
+            item.get()
+        except IsRedirectPageError:
+            LOG.info(f'Skip {item.title()} (item page is a redirect)')
+            continue
 
         if not is_redirect_page(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
         if not target_exists(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target does not exist, expect exist) ')
             continue
 
         if not target_is_connected(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target is not connected, expect connected)')
             continue
 
         try:
@@ -477,29 +490,37 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
                 QID_S2R,
                 f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details'
             )
-        except RuntimeWarning:
-            pass
+        except RuntimeWarning as exception:
+            LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
 
         
 def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
-        return
+        raise RuntimeWarning('No valid dbname received to process redirects with both bagdes')
     
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].notna() & df['s2r_badge'].notna() & df['i2r_badge'].notna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
-        item.get()
+        try:
+            item.get()
+        except IsRedirectPageError:
+            LOG.info(f'Skip {item.title()} (item page is a redirect)')
+            continue
 
         if not is_redirect_page(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
         if not target_exists(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target does not exist, expect exist) ')
             continue
 
         if not target_is_connected(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink target is not connected, expect connected)')
             continue
 
         if not has_badge(item, dbname, QID_I2R):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink does not have I2R badge, expect has)')
             continue
 
         try:
@@ -509,20 +530,25 @@ def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=Non
                 QID_S2R,
                 f'remove badge [[{QID_S2R}]] from {dbname} sitelink; [[Wikidata:Sitelinks to redirects|sitelinks to redirect pages]] should not carry both sitelink badges'
             )
-        except RuntimeWarning:
-            pass
+        except RuntimeWarning as exception:
+            LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
         
 
 def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
-        return
+        raise RuntimeWarning('No valid dbname received to process non-redirects with bagdes')
 
     filt = df['redirect_id'].isna() & df['s2r_badge'].notna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.s2r_qid)
-        item.get()
+        try:
+            item.get()
+        except IsRedirectPageError:
+            LOG.info(f'Skip {item.title()} (item page is a redirect)')
+            continue
 
         if is_redirect_page(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to redirect, expect non-redirect)')
             continue
 
         try:
@@ -532,16 +558,21 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
                 QID_S2R,
                 f'remove badge [[{QID_S2R}]] from {dbname} sitelink; sitelink points to a non-redirect page'
             )
-        except RuntimeWarning:
-            pass
+        except RuntimeWarning as exception:
+            LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
 
 
     filt = df['redirect_id'].isna() & df['i2r_badge'].notna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.i2r_qid)
-        item.get()
+        try:
+            item.get()
+        except IsRedirectPageError as exception:
+            LOG.info(f'Skip {item.title()} (item page is a redirect)')
+            continue
 
         if is_redirect_page(item, dbname):
+            LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to redirect, expect non-redirect)')
             continue
 
         try:
@@ -551,20 +582,23 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
                 QID_I2R,
                 f'remove badge [[{QID_I2R}]] from {dbname} sitelink; sitelink points to a non-redirect page'
             )
-        except RuntimeWarning:
-            pass
+        except RuntimeWarning as exception:
+            LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
 
 
 def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning('No valid dbname received in write_unconnected_redirect_target_report')
 
+    if df.shape[0] == 0:
+        return
+
     with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
         for elem in df.itertuples():
             file_handle.write('|-\n')
             file_handle.write(f'| {{{{Q|{elem.redirect_qid}}}}} || {dbname} || {elem.redirect_title} || {elem.target_title}\n')
 
-    LOG.debug(f'Wrote unconnected target report for {dbname} with {df.shape[0]} entries')
+    LOG.info(f'Added unconnected target cases to report for {dbname} ({df.shape[0]} entries)')
 
 
 def finish_unconnected_redirect_target_report() -> None:
@@ -578,10 +612,12 @@ def finish_unconnected_redirect_target_report() -> None:
         file_handle.write(wikitable_body)
         file_handle.write('|}')
 
+    LOG.info('Finished up report for unconnected redirect target cases')
+
 
 def log_cases_to_tsv_file(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
-        return
+        raise RuntimeWarning(f'No valid dbname received to log cases')
 
     with open('./output/cases.tsv', mode='a', encoding='utf8') as file_handle:
         for elem in df.itertuples():
@@ -606,7 +642,7 @@ def log_cases_to_tsv_file(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
 
 def log_project_stats(payload:dict[str, int], dbname:Optional[str]=None) -> None:
     if dbname is None:
-        return
+        raise RuntimeWarning(f'No valid dbname received to log project statistics')
 
     with open('./output/project_stats.tsv', mode='a', encoding='utf8') as file_handle:
         file_handle.write(f'{dbname}\t{payload.get("cnt_all_redirects")}\t' \
@@ -686,13 +722,10 @@ def process_project(project:dict[str, str]) -> None:
         )
     
     if PROCESS_UNCONNECTED_TARGETS is True:
-        try:
-            write_unconnected_redirect_target_report(
-                redirects_with_unconnected_target,
-                project.get('db_name')
-            )
-        except NotImplementedError:
-            pass
+        write_unconnected_redirect_target_report(
+            redirects_with_unconnected_target,
+            project.get('db_name')
+        )
 
 
 def main() -> None:
