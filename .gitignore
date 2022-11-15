@@ -1,2 +1,3 @@
 output/*.tsv
 venv/
+redirect-sitelink-badges.log
