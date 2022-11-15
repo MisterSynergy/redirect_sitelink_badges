@@ -322,6 +322,20 @@ def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
     return True
 
 
+def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
+    if qid_badge not in [ QID_S2R, QID_I2R ]:
+        raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
+
+    sitelink = item.sitelinks.get(dbname)
+    if sitelink is None:
+        raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
+
+    if qid_badge in [ badge_item.title() for badge_item in sitelink.badges ]:
+        return True
+
+    return False
+
+
 def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
@@ -483,6 +497,9 @@ def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=Non
             continue
 
         if not target_is_connected(item, dbname):
+            continue
+
+        if not has_badge(item, dbname, QID_I2R):
             continue
 
         try:
