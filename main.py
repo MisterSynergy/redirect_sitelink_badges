@@ -115,7 +115,7 @@ def query_database_names() -> list[dict[str, str]]:
     return db_names
 
 
-def query_redirect_pages_linked_to_wikidata_item(database:str='enwiki') -> pd.DataFrame:    
+def query_redirect_pages_linked_to_wikidata_item(database:str='enwiki') -> pd.DataFrame:
     query = """SELECT
   redirect_page.page_id AS redirect_id,
   redirect_page.page_namespace AS redirect_namespace,
@@ -168,7 +168,7 @@ def query_redirect_badges(url:str) -> pd.DataFrame:
         'name' : str,
         'badge' : str
     }
-    
+
     df = query_wdqs_to_dataframe(query, columns)
     if df.shape[0]==0:
         df = pd.DataFrame(columns=columns.keys())
@@ -180,7 +180,7 @@ def query_redirect_badges(url:str) -> pd.DataFrame:
         ],
         inplace=True
     )
-    
+
     return df
 
 
@@ -206,7 +206,7 @@ def make_master_df(database:Optional[str]=None, url:Optional[str]=None) -> pd.Da
         },
         inplace=True
     )
-    
+
     df = df.merge(
         right=current_badges.loc[current_badges['badge']==QID_I2R],
         how='outer',
@@ -240,7 +240,7 @@ def filter_redirects_with_unconnected_target(df:pd.DataFrame) -> pd.DataFrame:  
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].isna()
     return df.loc[filt]
 
-    
+
 def filter_redirects_with_any_badge(df:pd.DataFrame) -> pd.DataFrame:  # informational only
     filt = df['redirect_id'].notna() & (df['s2r_badge'].notna() | df['i2r_badge'].notna())
     return df.loc[filt]
@@ -273,12 +273,12 @@ def filter_non_redirects_with_badges(df:pd.DataFrame) -> pd.DataFrame:  # in ord
 
 def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
     sitelink = item.sitelinks.get(dbname)
-    
+
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
-    
+
     local_page = pwb.Page(source=sitelink)
-    
+
     return local_page.isRedirectPage()
 
 
@@ -287,7 +287,7 @@ def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
-    
+
     local_page = pwb.Page(source=sitelink)
 
     if not local_page.isRedirectPage():
@@ -303,7 +303,7 @@ def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
 
     if sitelink is None:
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
-    
+
     local_page = pwb.Page(source=sitelink)
 
     if not local_page.isRedirectPage():
@@ -313,7 +313,7 @@ def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
 
     if not target_page.exists():
         raise RuntimeWarning(f'Target of redirect page for {dbname} sitelink in {item.title()} does not exist')
-    
+
     try:
         _ = target_page.data_item()
     except NoPageError as exception:
@@ -425,16 +425,19 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
 def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning('No valid dbname received to process redirects with inexistent targets')
-    
+
     filt = df['redirect_id'].notna() & df['target_id'].isna() & df['target_interwiki'].isna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
         try:
             item.get()
+        except NoPageError:
+            LOG.info(f'Skip {row.redirect_qid} (item page does not exist)')
+            continue
         except IsRedirectPageError:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
-        
+
         if not is_redirect_page(item, dbname):
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
@@ -470,6 +473,9 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
         item = pwb.ItemPage(REPO, row.redirect_qid)
         try:
             item.get()
+        except NoPageError:
+            LOG.info(f'Skip {row.redirect_qid} (item page does not exist)')
+            continue
         except IsRedirectPageError:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
@@ -496,16 +502,19 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
         except RuntimeWarning as exception:
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
 
-        
+
 def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning('No valid dbname received to process redirects with both bagdes')
-    
+
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].notna() & df['s2r_badge'].notna() & df['i2r_badge'].notna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
         try:
             item.get()
+        except NoPageError:
+            LOG.info(f'Skip {row.redirect_qid} (item page does not exist)')
+            continue
         except IsRedirectPageError:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
@@ -535,7 +544,7 @@ def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=Non
             )
         except RuntimeWarning as exception:
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
-        
+
 
 def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
@@ -546,6 +555,9 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
         item = pwb.ItemPage(REPO, row.s2r_qid)
         try:
             item.get()
+        except NoPageError:
+            LOG.info(f'Skip {row.s2r_qid} (item page does not exist)')
+            continue
         except IsRedirectPageError:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
@@ -570,6 +582,9 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
         item = pwb.ItemPage(REPO, row.i2r_qid)
         try:
             item.get()
+        except NoPageError:
+            LOG.info(f'Skip {row.i2r_qid} (item page does not exist)')
+            continue
         except IsRedirectPageError as exception:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
@@ -711,7 +726,7 @@ def process_project(project:dict[str, str]) -> None:
             redirects_with_both_badges,
             project.get('db_name')
         )
-    
+
     if PROCESS_NON_REDIRECTS is True:
         process_non_redirects_with_badges(
             non_redirects_with_badges,
@@ -723,7 +738,7 @@ def process_project(project:dict[str, str]) -> None:
             redirects_with_inexistent_target,
             project.get('db_name')
         )
-    
+
     if PROCESS_UNCONNECTED_TARGETS is True:
         write_unconnected_redirect_target_report(
             redirects_with_unconnected_target,
