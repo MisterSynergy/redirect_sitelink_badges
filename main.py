@@ -267,7 +267,7 @@ def query_database_names() -> list[dict[str, str]]:
 
 
 def clear_logfiles() -> None:
-    for logfile in [ './output/cases.tsv', './output/project_stats.tsv' ]:
+    for logfile in [ './output/cases.tsv', './output/project_stats.tsv', './output/unconnected_wikitable_body.txt' ]:
         open(logfile, mode='w', encoding='utf8').write('')
 
 
@@ -559,8 +559,24 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
     if dbname is None:
         raise RuntimeWarning('No valid dbname received in write_unconnected_redirect_target_report')
 
-    LOG.debug(f'Write unconnected target report for {dbname} with {df.shape[0]} entries')
-    raise NotImplementedError('"write_unconnected_redirect_target_report" is not yet available')
+    with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
+        for elem in df.itertuples():
+            file_handle.write('|-\n')
+            file_handle.write(f'| {{{{Q|{elem.redirect_qid}}}}} || {dbname} || {elem.redirect_title} || {elem.target_title}\n')
+
+    LOG.debug(f'Wrote unconnected target report for {dbname} with {df.shape[0]} entries')
+
+
+def finish_unconnected_redirect_target_report() -> None:
+    with open('./output/unconnected_wikitable_body.txt', mode='r', encoding='utf8') as file_handle:
+        wikitable_body = file_handle.read()
+
+    with open('./output/unconnected_wikitable.txt', mode='w', encoding='utf8') as file_handle:
+        file_handle.write('{| class="wikitable"\n')
+        file_handle.write('|-\n')
+        file_handle.write('! item !! project !! redirect !! unconnected target\n')
+        file_handle.write(wikitable_body)
+        file_handle.write('|}')
 
 
 def log_cases_to_tsv_file(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
@@ -688,6 +704,8 @@ def main() -> None:
     for project in projects:
         process_project(project)
         sleep(1)
+
+    finish_unconnected_redirect_target_report()
 
 
 if __name__=='__main__':
