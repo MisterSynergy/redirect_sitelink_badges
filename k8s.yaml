@@ -1,0 +1,30 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: msynbot.redirect-badges
+  labels:
+    name: msynbot.redirect-badges
+    # The toolforge=tool label will cause $HOME and other paths to be mounted from Toolforge
+    toolforge: tool
+spec:
+  schedule: "42 10 * * 5"
+  successfulJobsHistoryLimit: 0
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            toolforge: tool
+        spec:
+          containers:
+          - name: redirect-badges
+            image: docker-registry.tools.wmflabs.org/toolforge-python39-sssd-base:latest
+            env:
+            - name: PYTHONPATH
+              value: /data/project/shared/pywikibot/stable
+            - name: HOME
+              value: /data/project/msynbot
+            workingDir: /data/project/msynbot/pywikibot_tasks/redirect_sitelink_badges
+            command: [ venv/bin/python3 ]
+            args: [ main.py ]
+          restartPolicy: Never
