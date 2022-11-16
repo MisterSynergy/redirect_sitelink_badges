@@ -133,6 +133,29 @@ def query_database_names() -> list[dict[str, str]]:
     return db_names
 
 
+def query_namespaces_from_api(url:str) -> dict[int, dict[str, str]]:
+    ns = {}
+
+    response = requests.get(
+        url=f'{url}/w/api.php',
+        params={
+            'action' : 'query',
+            'meta' : 'siteinfo',
+            'siprop' : 'namespaces',
+            'format' : 'json'
+        },
+        headers={
+            'User-Agent': WDQS_USER_AGENT,
+        }
+    )
+
+    payload = response.json()
+    for dct in payload.get('query', {}).get('namespaces', {}).values():
+        ns[dct.get('id', -3)] = { 'local' : dct.get('*', ''), 'canonical' : dct.get('canonical', '') }
+
+    return ns
+
+
 def query_redirect_pages_linked_to_wikidata_item(database:str='enwiki') -> pd.DataFrame:
     query = """SELECT
   redirect_page.page_id AS redirect_id,
@@ -660,6 +683,8 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
         redirect_site = pwb.Site(url=url)
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w:")}{redirect_site.lang}:'
 
+    namespaces = query_namespaces_from_api(url)
+
     with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
         for elem in df.itertuples():
             if elem.target_interwiki!='':
@@ -667,11 +692,25 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
             else:
                 target_interwiki_prefix = redirect_interwiki_prefix
 
+            if int(elem.redirect_namespace)==0:
+                redirect_namespace = ''
+                redirect_namespace_canonical = ''
+            else:
+                redirect_namespace = f'{namespaces.get(int(elem.redirect_namespace), {}).get("local", "")}:'
+                redirect_namespace_canonical = f' ({namespaces.get(int(elem.redirect_namespace), {}).get("canonical", "")})'
+            
+            if int(elem.target_namespace)==0:
+                target_namespace = ''
+                target_namespace_canonical = ''
+            else:
+                target_namespace = f'{namespaces.get(int(elem.target_namespace), {}).get("local", "")}:'
+                target_namespace_canonical = f' ({namespaces.get(int(elem.target_namespace), {}).get("canonical", "")})'
+
             file_handle.write('|-\n')
             file_handle.write(f'| {{{{Q|{elem.redirect_qid}}}}}\n')
             file_handle.write(f'| {dbname}\n')
-            file_handle.write(f'| [[{redirect_interwiki_prefix}{elem.redirect_title}|{elem.redirect_title.replace("_", " ")}]]\n')
-            file_handle.write(f'| [[{target_interwiki_prefix}{elem.target_title}|{elem.target_title.replace("_", " ")}]]\n')
+            file_handle.write(f'| [[{redirect_interwiki_prefix}{redirect_namespace}{elem.redirect_title}|{redirect_namespace}{elem.redirect_title.replace("_", " ")}]]{redirect_namespace_canonical}\n')
+            file_handle.write(f'| [[{target_interwiki_prefix}{target_namespace}{elem.target_title}|{target_namespace}{elem.target_title.replace("_", " ")}]]{target_namespace_canonical}\n')
 
     LOG.info(f'Added unconnected target cases to report for {dbname} ({df.shape[0]} entries)')
 
