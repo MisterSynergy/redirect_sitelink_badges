@@ -40,6 +40,7 @@ FAMILY_SHORTCUTS = {
     'mediawikiwiki' : 'mw:',
     'metawiki' : 'm:',
     'specieswiki' : 'species:',
+    'simplewiki' : 'w:simple:',
     'wikibooks' : 'b:',
     'wikinews' : 'n:',
     'wikipedia' : 'w:',
@@ -482,7 +483,13 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
 
-        if not is_redirect_page(item, dbname):
+        try:
+            check_is_redirect = is_redirect_page(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if not check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
@@ -530,7 +537,13 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
 
-        if not is_redirect_page(item, dbname):
+        try:
+            check_is_redirect = is_redirect_page(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if not check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
@@ -575,7 +588,13 @@ def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=Non
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
 
-        if not is_redirect_page(item, dbname):
+        try:
+            check_is_redirect = is_redirect_page(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if not check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
             continue
 
@@ -624,7 +643,13 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
 
-        if is_redirect_page(item, dbname):
+        try:
+            check_is_redirect = is_redirect_page(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to redirect, expect non-redirect)')
             continue
 
@@ -651,7 +676,13 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
             continue
 
-        if is_redirect_page(item, dbname):
+        try:
+            check_is_redirect = is_redirect_page(item, dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Skip {item.title()}, {dbname} sitelink: {exception}')
+            continue
+
+        if check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to redirect, expect non-redirect)')
             continue
 
@@ -677,7 +708,7 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
 
     if dbname == 'wikidatawiki':
         redirect_interwiki_prefix = ''
-    elif dbname in [ 'commonswiki', 'mediawikiwiki', 'metawiki', 'specieswiki' ]:
+    elif dbname in [ 'commonswiki', 'mediawikiwiki', 'metawiki', 'specieswiki', 'simplewiki' ]:
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(dbname, "")}'
     else:
         redirect_site = pwb.Site(url=url)
