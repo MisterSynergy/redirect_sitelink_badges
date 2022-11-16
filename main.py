@@ -36,21 +36,18 @@ PROCESS_UNCONNECTED_TARGETS = False
 SIMULATE = True
 
 FAMILY_SHORTCUTS = {
-    'commons' : 'c',
-    'mediawiki' : 'mw',
-    'meta' : 'm',
-    'species' : 'species',
-    'wikibooks' : 'b',
-    'wikidata' : 'd',
-    'wikimania' : 'wikimania',
-    'wikimedia' : 'wmf',
-    'wikinews' : 'n',
-    'wikipedia' : 'w',
-    'wikiquote' : 'q',
-    'wikisource' : 's',
-    'wikiversity' : 'v',
-    'wikivoyage' : 'voy',
-    'wiktionary' : 'wikt',
+    'commonswiki' : 'c:',
+    'mediawikiwiki' : 'mw:',
+    'metawiki' : 'm:',
+    'specieswiki' : 'species:',
+    'wikibooks' : 'b:',
+    'wikinews' : 'n:',
+    'wikipedia' : 'w:',
+    'wikiquote' : 'q:',
+    'wikisource' : 's:',
+    'wikiversity' : 'v:',
+    'wikivoyage' : 'voy:',
+    'wiktionary' : 'wikt:',
 }
 SITELINK_MAPPER = {
     'be_x_oldwiki' : 'be-tarask'
@@ -655,21 +652,16 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
     if df.shape[0] == 0:
         return
 
-    redirect_site = pwb.Site(url=url)
-    redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w")}:{redirect_site.lang}:'
+    if dbname == 'wikidatawiki':
+        redirect_interwiki_prefix = ''
+    elif dbname in [ 'commonswiki', 'mediawikiwiki', 'metawiki', 'specieswiki' ]:
+        redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(dbname, "")}'
+    else:
+        redirect_site = pwb.Site(url=url)
+        redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w:")}{redirect_site.lang}:'
 
     with open('./output/unconnected_wikitable_body.txt', mode='a', encoding='utf8') as file_handle:
         for elem in df.itertuples():
-            item = pwb.ItemPage(REPO, elem.redirect_qid)
-            try:
-                item.get()
-            except NoPageError:
-                LOG.info(f'Skip {elem.redirect_qid} (item page does not exist)')
-                continue
-            except IsRedirectPageError as exception:
-                LOG.info(f'Skip {item.title()} (item page is a redirect)')
-                continue
-
             if elem.target_interwiki!='':
                 target_interwiki_prefix = f'{redirect_interwiki_prefix}{elem.target_interwiki}:'
             else:
