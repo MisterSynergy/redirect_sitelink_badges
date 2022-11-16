@@ -50,9 +50,6 @@ FAMILY_SHORTCUTS = {
     'wikivoyage' : 'voy:',
     'wiktionary' : 'wikt:',
 }
-SITELINK_MAPPER = {
-    'be_x_oldwiki' : 'be-tarask'
-}
 
 
 class Replica:
@@ -126,10 +123,16 @@ def clear_logfiles() -> None:
 
 def query_database_names() -> list[dict[str, str]]:
     # as in https://quarry.wmcloud.org/query/12744
-    query = """SELECT dbname, url FROM wiki WHERE is_closed=0 AND has_wikidata=1"""
+    query = """SELECT dbname, url, family, lang FROM wiki WHERE is_closed=0 AND has_wikidata=1"""
     db_names = []
     for row in query_mediawiki('meta', query):
-        db_names.append({'db_name' : row['dbname'], 'url' : row['url']})
+        payload = {
+            'db_name' : row['dbname'],
+            'url' : row['url'],
+            'family' : row['family'],
+            'language' : row['lang']
+        }
+        db_names.append(payload)
 
     return db_names
 
@@ -411,7 +414,7 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
     ]
     new_sitelink = pwb.SiteLink(
         sitelink.canonical_title(),
-        site=SITELINK_MAPPER.get(dbname, dbname),
+        site=dbname,
         badges=new_badges
     )
 
@@ -441,7 +444,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
 
     new_sitelink = pwb.SiteLink(
         sitelink.canonical_title(),
-        site=SITELINK_MAPPER.get(dbname, dbname),
+        site=dbname,
         badges=new_badges
     )
 
@@ -460,7 +463,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
 def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
     if SIMULATE is not True:
         item.removeSitelink(
-            SITELINK_MAPPER.get(dbname, dbname),
+            dbname,
             summary=f'{edit_summary}{EDIT_SUMMARY_APPENDIX}'
         )
 
@@ -697,11 +700,15 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
 
 
-def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[str]=None, url:Optional[str]=None) -> None:
+def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[str]=None, url:Optional[str]=None, family:Optional[str]=None, language:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning('No valid dbname received in write_unconnected_redirect_target_report')
     if url is None:
         raise RuntimeWarning('No valid url received in write_unconnected_redirect_target_report')
+    if family is None:
+        raise RuntimeWarning('No valid family received in write_unconnected_redirect_target_report')
+    if language is None:
+        raise RuntimeWarning('No valid language received in write_unconnected_redirect_target_report')
 
     if df.shape[0] == 0:
         return
@@ -711,7 +718,7 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
     elif dbname in [ 'commonswiki', 'mediawikiwiki', 'metawiki', 'specieswiki', 'simplewiki' ]:
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(dbname, "")}'
     else:
-        redirect_site = pwb.Site(url=url)
+        redirect_site = pwb.Site(code=language, fam=family)
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w:")}{redirect_site.lang}:'
 
     namespaces = query_namespaces_from_api(url)
@@ -870,7 +877,9 @@ def process_project(project:dict[str, str]) -> None:
         write_unconnected_redirect_target_report(
             redirects_with_unconnected_target,
             project.get('db_name'),
-            project.get('url')
+            project.get('url'),
+            project.get('family'),
+            project.get('language')
         )
 
 
@@ -884,7 +893,8 @@ def main() -> None:
         process_project(project)
         sleep(1)
 
-    finish_unconnected_redirect_target_report()
+    if PROCESS_UNCONNECTED_TARGETS is True:
+        finish_unconnected_redirect_target_report()
 
 
 if __name__=='__main__':
