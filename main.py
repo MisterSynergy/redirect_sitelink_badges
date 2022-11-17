@@ -8,7 +8,7 @@ from typing import Any, Optional
 
 import pandas as pd
 import pywikibot as pwb
-from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError
+from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError, InterwikiRedirectPageError
 import requests
 import mariadb
 
@@ -342,6 +342,8 @@ def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
         target_page = local_page.getRedirectTarget()
     except CircularRedirectError as exception:
         raise RuntimeWarning(f'Circular redirect detected for {dbname} sitelink in {item.title()}') from exception
+    except InterwikiRedirectPageError as exception:
+        raise RuntimeWarning(f'Interwiki redirect detected for {dbname} sitelink in {item.title()}') from exception
 
     return target_page.exists()
 
