@@ -9,7 +9,7 @@ from typing import Any, Optional
 import pandas as pd
 import pywikibot as pwb
 from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError, \
-    InterwikiRedirectPageError, APIError, CascadeLockedPageError, LockedPageError
+    InterwikiRedirectPageError, APIError, CascadeLockedPageError, LockedPageError, NoUsernameError
 import requests
 import mariadb
 
@@ -489,7 +489,11 @@ WHERE
   pp_value=?"""
 
     site = pwb.APISite.fromDBName(dbname)
-    site.login(autocreate=True)
+    try:
+        site.login(autocreate=True)
+    except NoUsernameError as exception:
+        LOG.warning(exception)
+        return
 
     for row in query_mediawiki(dbname, query, params):
         page = pwb.Page(
