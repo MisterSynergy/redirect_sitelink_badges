@@ -71,7 +71,7 @@ class Replica:
         self.replica.close()
 
 
-def query_mediawiki(database:str, query:str, params:Optional[dict[str, Any]]=None) -> Generator[dict[str, Any], None, None]:
+def query_mediawiki(database:str, query:str, params:Optional[tuple[Any]]=None) -> Generator[dict[str, Any], None, None]:
     with Replica(database) as db_cursor:
         if params is None:
             db_cursor.execute(query)
@@ -478,7 +478,7 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
 
 
 def touch_pages(qid:str, dbname:str) -> None:
-    params = { 'qid' : qid }
+    params = (qid,)
     query = f"""SELECT
   page_namespace,
   page_title,
@@ -486,7 +486,7 @@ FROM
   page
     JOIN page_props ON page_id=pp_page AND pp_propname='wikibase_item'
 WHERE
-  pp_value='%(qid)s'"""
+  pp_value=?"""
 
     for row in query_mediawiki(dbname, query, params):
         page = pwb.Page(source=pwb.APISite.fromDBName(dbname), title=row.get('page_title'), ns=row.get('page_namespace'))
