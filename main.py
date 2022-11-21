@@ -8,7 +8,8 @@ from typing import Any, Optional
 
 import pandas as pd
 import pywikibot as pwb
-from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError, InterwikiRedirectPageError
+from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError, \
+    InterwikiRedirectPageError, APIError, CascadeLockedPageError, LockedPageError
 import requests
 import mariadb
 
@@ -70,9 +71,13 @@ class Replica:
         self.replica.close()
 
 
-def query_mediawiki(database:str, query:str) -> Generator[dict, None, None]:
+def query_mediawiki(database:str, query:str, params:Optional[dict[str, Any]]=None) -> Generator[dict[str, Any], None, None]:
     with Replica(database) as db_cursor:
-        db_cursor.execute(query)
+        if params is None:
+            db_cursor.execute(query)
+        else:
+            db_cursor.execute(query, params)
+
         result = db_cursor.fetchall()
 
         for row in result:
@@ -472,6 +477,41 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
     LOG.info(f'Removed sitelink for {dbname} in {item.title()}')
 
 
+def touch_pages(qid:str, dbname:str) -> None:
+    params = { 'qid' : qid }
+    query = f"""SELECT
+  page_namespace,
+  page_title,
+FROM
+  page
+    JOIN page_props ON page_id=pp_page AND pp_propname='wikibase_item'
+WHERE
+  pp_value='%(qid)s'"""
+
+    for row in query_mediawiki(dbname, query, params):
+        page = pwb.Page(source=pwb.APISite.fromDBName(dbname), title=row.get('page_title'), ns=row.get('page_namespace'))
+
+        try:
+            touch_page(page)
+        except RuntimeWarning as exception:
+            LOG.warning(exception)
+        else:
+            LOG.info(f'Touched page {page.title()} on {dbname}')
+
+
+def touch_page(page:pwb.Page) -> None:
+    try:
+        page.touch(quiet=True)
+    except NoPageError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (page does not exist)') from exception
+    except APIError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (API Error)') from exception
+    except CascadeLockedPageError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (cascade locked page)') from exception
+    except LockedPageError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (locked page)') from exception
+
+
 def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning('No valid dbname received to process redirects with inexistent targets')
@@ -537,9 +577,11 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
             item.get()
         except NoPageError:
             LOG.info(f'Skip {row.redirect_qid} (item page does not exist)')
+            touch_pages(row.redirect_qid, dbname)
             continue
         except IsRedirectPageError:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
+            touch_pages(row.redirect_qid, dbname)
             continue
 
         try:
@@ -550,6 +592,7 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
 
         if not check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
+            touch_pages(item.title(), dbname)
             continue
 
         try:
