@@ -488,8 +488,15 @@ FROM
 WHERE
   pp_value=?"""
 
+    site = pwb.APISite.fromDBName(dbname)
+    site.login(autocreate=True)
+
     for row in query_mediawiki(dbname, query, params):
-        page = pwb.Page(source=pwb.APISite.fromDBName(dbname), title=row.get('page_title'), ns=row.get('page_namespace'))
+        page = pwb.Page(
+            source=site,
+            title=row.get('page_title'),
+            ns=row.get('page_namespace')
+        )
 
         try:
             touch_page(page)
@@ -781,7 +788,7 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
             else:
                 redirect_namespace = f'{namespaces.get(int(elem.redirect_namespace), {}).get("local", "")}:'
                 redirect_namespace_canonical = f' ({namespaces.get(int(elem.redirect_namespace), {}).get("canonical", "")})'
-            
+
             if int(elem.target_namespace)==0:
                 target_namespace = ''
                 target_namespace_canonical = ''
