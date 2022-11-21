@@ -481,7 +481,7 @@ def touch_pages(qid:str, dbname:str) -> None:
     params = (qid,)
     query = f"""SELECT
   page_namespace,
-  page_title,
+  page_title
 FROM
   page
     JOIN page_props ON page_id=pp_page AND pp_propname='wikibase_item'
