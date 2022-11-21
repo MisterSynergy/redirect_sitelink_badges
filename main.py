@@ -517,6 +517,8 @@ def touch_page(page:pwb.Page) -> None:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (cascade locked page)') from exception
     except LockedPageError as exception:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (locked page)') from exception
+    except EOFError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (terminal input expected, but impossible)') from exception
 
 
 def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
