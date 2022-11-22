@@ -477,7 +477,11 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
     LOG.info(f'Removed sitelink for {dbname} in {item.title()}')
 
 
-def touch_pages(qid:str, dbname:str) -> None:
+def touch_pages(qid:str, dbname:str, site:pwb.Site) -> None:
+    if not site.logged_in():
+        LOG.warning(f'Skip touching pages using {qid} in {dbname} (not logged in)')
+        return
+
     params = (qid,)
     query = f"""SELECT
   page_namespace,
@@ -487,13 +491,6 @@ FROM
     JOIN page_props ON page_id=pp_page AND pp_propname='wikibase_item'
 WHERE
   pp_value=?"""
-
-    site = pwb.APISite.fromDBName(dbname)
-    try:
-        site.login(autocreate=True)
-    except NoUsernameError as exception:
-        LOG.warning(exception)
-        return
 
     for row in query_mediawiki(dbname, query, params):
         page = pwb.Page(
@@ -521,6 +518,8 @@ def touch_page(page:pwb.Page) -> None:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (cascade locked page)') from exception
     except LockedPageError as exception:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (locked page)') from exception
+    except OtherPageSaveError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (other reason)') from exception
     except EOFError as exception:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (terminal input expected, but impossible)') from exception
 
@@ -583,6 +582,12 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
     if dbname is None:
         raise RuntimeWarning('No valid dbname received to process redirects without bagdes')
 
+    site = pwb.APISite.fromDBName(dbname)
+    try:
+        site.login(autocreate=True)
+    except NoUsernameError as exception:
+        LOG.warning(exception)
+
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].notna() & df['s2r_badge'].isna() & df['i2r_badge'].isna()
     for row in df.loc[filt].itertuples():
         item = pwb.ItemPage(REPO, row.redirect_qid)
@@ -590,11 +595,11 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
             item.get()
         except NoPageError:
             LOG.info(f'Skip {row.redirect_qid} (item page does not exist)')
-            touch_pages(row.redirect_qid, dbname)
+            touch_pages(row.redirect_qid, dbname, site)
             continue
         except IsRedirectPageError:
             LOG.info(f'Skip {item.title()} (item page is a redirect)')
-            touch_pages(row.redirect_qid, dbname)
+            touch_pages(row.redirect_qid, dbname, site)
             continue
 
         try:
@@ -605,7 +610,7 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
 
         if not check_is_redirect:
             LOG.info(f'Skip {item.title()}, {dbname} sitelink (sitelink to non-redirect, expect redirect)')
-            touch_pages(item.title(), dbname)
+            touch_pages(item.title(), dbname, site)
             continue
 
         try:
