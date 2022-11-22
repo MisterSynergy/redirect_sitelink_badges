@@ -406,7 +406,7 @@ def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
 
 def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) -> None:
     if qid_badge not in [ QID_S2R, QID_I2R ]:
-        raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
+        raise RuntimeError(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
@@ -439,7 +439,7 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
 
 def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) -> None:
     if qid_badge not in [ QID_S2R, QID_I2R ]:
-        raise RuntimeWarning(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
+        raise RuntimeError(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
@@ -570,6 +570,9 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
                 )
             except RuntimeWarning as exception:
                 LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+            except RuntimeError as exception:
+                LOG.error(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+                return
         else:
             remove_sitelink(
                 item,
@@ -635,7 +638,11 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
                 f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details'
             )
         except RuntimeWarning as exception:
+            touch_pages(item.title(), dbname, site)
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+        except RuntimeError as exception:
+            LOG.error(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+            return
 
 
 def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
@@ -691,6 +698,9 @@ def process_redirects_with_both_badges(df:pd.DataFrame, dbname:Optional[str]=Non
             )
         except RuntimeWarning as exception:
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+        except RuntimeError as exception:
+            LOG.error(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+            return
 
 
 def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
@@ -728,7 +738,9 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
             )
         except RuntimeWarning as exception:
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
-
+        except RuntimeError as exception:
+            LOG.error(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+            return
 
     filt = df['redirect_id'].isna() & df['i2r_badge'].notna()
     for row in df.loc[filt].itertuples():
@@ -761,6 +773,9 @@ def process_non_redirects_with_badges(df:pd.DataFrame, dbname:Optional[str]=None
             )
         except RuntimeWarning as exception:
             LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+        except RuntimeError as exception:
+            LOG.error(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
+            return
 
 
 def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[str]=None, url:Optional[str]=None, family:Optional[str]=None, language:Optional[str]=None) -> None:
