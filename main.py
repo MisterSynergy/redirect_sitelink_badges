@@ -9,7 +9,8 @@ from typing import Any, Optional
 import pandas as pd
 import pywikibot as pwb
 from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError, \
-    InterwikiRedirectPageError, APIError, CascadeLockedPageError, LockedPageError, NoUsernameError
+    InterwikiRedirectPageError, APIError, CascadeLockedPageError, LockedPageError, NoUsernameError, \
+    TitleblacklistError
 import requests
 import mariadb
 
@@ -518,6 +519,8 @@ def touch_page(page:pwb.Page) -> None:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (cascade locked page)') from exception
     except LockedPageError as exception:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (locked page)') from exception
+    except TitleblacklistError as exception:
+        raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (page is blacklisted)') from exception
     except OtherPageSaveError as exception:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (other reason)') from exception
     except EOFError as exception:
