@@ -326,6 +326,7 @@ def is_redirect_page(item:pwb.ItemPage, dbname:str) -> bool:
     sitelink = item.sitelinks.get(dbname)
 
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
     local_page = pwb.Page(source=sitelink)
@@ -337,6 +338,7 @@ def target_exists(item:pwb.ItemPage, dbname:str) -> bool:
     sitelink = item.sitelinks.get(dbname)
 
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
     local_page = pwb.Page(source=sitelink)
@@ -358,6 +360,7 @@ def target_is_connected(item:pwb.ItemPage, dbname:str) -> bool:
     sitelink = item.sitelinks.get(dbname)
 
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
     local_page = pwb.Page(source=sitelink)
@@ -384,6 +387,7 @@ def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
 
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
     if qid_badge in [ badge_item.title() for badge_item in sitelink.badges ]:
@@ -395,6 +399,7 @@ def has_badge(item:pwb.ItemPage, dbname:str, qid_badge:str) -> bool:
 def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink found for {dbname} in {item.title()}')
 
     local_page = pwb.Page(source=sitelink)
@@ -411,6 +416,7 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
 
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink for {dbname} found in {item.title()}')
 
     if qid_badge in [ badge_item_page.title() for badge_item_page in sitelink.badges ]:
@@ -444,6 +450,7 @@ def remove_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str)
 
     sitelink = item.sitelinks.get(dbname)
     if sitelink is None:
+        touch_pages(item.title(), dbname)
         raise RuntimeWarning(f'No sitelink for {dbname} found in {item.title()}')
 
     new_badges = [ badge_item_page for badge_item_page in sitelink.badges if badge_item_page.title()!=qid_badge ]
@@ -478,7 +485,10 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
     LOG.info(f'Removed sitelink for {dbname} in {item.title()}')
 
 
-def touch_pages(qid:str, dbname:str, site:pwb.Site) -> None:
+def touch_pages(qid:str, dbname:str, site:Optional[pwb.Site]=None) -> None:
+    if site is None:
+        site = get_site_from_dbname(dbname)
+
     if not site.logged_in():
         LOG.warning(f'Skip touching pages using {qid} in {dbname} (not logged in)')
         return
@@ -525,6 +535,17 @@ def touch_page(page:pwb.Page) -> None:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (other reason)') from exception
     except EOFError as exception:
         raise RuntimeWarning(f'Cannot touch page {page.title()} on {page.site.sitename} (terminal input expected, but impossible)') from exception
+
+
+def get_site_from_dbname(dbname:str) -> pwb.Site:
+    site = pwb.APISite.fromDBName(dbname)
+    try:
+        site.login(autocreate=True)
+    except NoUsernameError as exception:
+        LOG.warning(exception)
+        raise RuntimeWarning(f'Cannot login to site for dbname {dbname}') from exception
+
+    return site
 
 
 def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
@@ -588,11 +609,7 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
     if dbname is None:
         raise RuntimeWarning('No valid dbname received to process redirects without bagdes')
 
-    site = pwb.APISite.fromDBName(dbname)
-    try:
-        site.login(autocreate=True)
-    except NoUsernameError as exception:
-        LOG.warning(exception)
+    site = get_site_from_dbname(dbname)
 
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].notna() & df['s2r_badge'].isna() & df['i2r_badge'].isna()
     for row in df.loc[filt].itertuples():
