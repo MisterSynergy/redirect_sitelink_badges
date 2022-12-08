@@ -3,7 +3,7 @@ from io import StringIO
 import logging
 import logging.config
 from os.path import expanduser
-from time import sleep
+from time import sleep, strftime
 from typing import Any, Optional
 
 import pandas as pd
@@ -26,6 +26,8 @@ REPO = SITE.data_repository()
 
 QID_S2R = 'Q70893996'
 QID_I2R = 'Q70894304'
+
+REPORT_UNCONNECTED_TARGET = 'Wikidata:Database reports/Sitelink to redirect with unconnected target'
 
 REDIRECT_LENGTH_CUTOFF = 100  # bytes; longer redirect pages are treated as valid even if the target does not exist
 EDIT_SUMMARY_APPENDIX:str = ' #msynbotTask10'
@@ -865,6 +867,23 @@ def finish_unconnected_redirect_target_report() -> None:
     LOG.info('Finished up report for unconnected redirect target cases')
 
 
+def write_unconnected_redirect_target_report_to_wiki() -> None:
+    with open('./output/unconnected_wikitable.txt', mode='w', encoding='utf8') as file_handle:
+        table = file_handle.read()
+
+    report_page = pwb.Page(SITE, REPORT_UNCONNECTED_TARGET)
+    report_page.text = f"""This report lists [[Wikidata:Sitelinks to redirects|sitelinks to redirect pages]] on client wikis where the redirect target page is not connected to any Wikidata item. The reported sitelinks to redirects may or may not carry a redirect badge. For most cases, one of these two solutions exist:
+* resolve redirect to target, and remove the redirect badge if there is one
+* retain the redirect as a sitelink, add the {{{{Q|{QID_I2R}}}}} badge if missing, and connect the target page to another suitable Wikidata item
+
+This report is updated weekly. Last update: {strftime('%e %B %Y')}.
+
+{table}"""
+    report_page.save(summary=f'update report{EDIT_SUMMARY_APPENDIX}')
+
+    LOG.info(f'Wrote report for unconnected redirect target cases to page "{REPORT_UNCONNECTED_TARGET}"')
+
+
 def log_cases_to_tsv_file(df:pd.DataFrame, dbname:Optional[str]=None) -> None:
     if dbname is None:
         raise RuntimeWarning(f'No valid dbname received to log cases')
@@ -993,6 +1012,7 @@ def main() -> None:
 
     if PROCESS_UNCONNECTED_TARGETS is True:
         finish_unconnected_redirect_target_report()
+        write_unconnected_redirect_target_report_to_wiki()
 
 
 if __name__=='__main__':
