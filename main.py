@@ -868,7 +868,7 @@ def finish_unconnected_redirect_target_report() -> None:
 
 
 def write_unconnected_redirect_target_report_to_wiki() -> None:
-    with open('./output/unconnected_wikitable.txt', mode='w', encoding='utf8') as file_handle:
+    with open('./output/unconnected_wikitable.txt', mode='r', encoding='utf8') as file_handle:
         table = file_handle.read()
 
     report_page = pwb.Page(SITE, REPORT_UNCONNECTED_TARGET)
