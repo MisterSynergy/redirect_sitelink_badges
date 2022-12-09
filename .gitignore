@@ -1,3 +1,4 @@
 output/*.tsv
+output/*.txt
 venv/
 redirect-sitelink-badges.log
