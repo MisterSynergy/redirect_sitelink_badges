@@ -489,7 +489,11 @@ def remove_sitelink(item:pwb.ItemPage, dbname:str, edit_summary:str) -> None:
 
 def touch_pages(qid:str, dbname:str, site:Optional[pwb.Site]=None) -> None:
     if site is None:
-        site = get_site_from_dbname(dbname)
+        try:
+            site = get_site_from_dbname(dbname)
+        except RuntimeWarning as exception:
+            LOG.warning(f'Cannot instantiate a site object for {dbname} due to exception {exception}; skip job "touch_pages" for project')
+            return
 
     if not site.logged_in():
         LOG.warning(f'Skip touching pages using {qid} in {dbname} (not logged in)')
@@ -611,7 +615,11 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
     if dbname is None:
         raise RuntimeWarning('No valid dbname received to process redirects without bagdes')
 
-    site = get_site_from_dbname(dbname)
+    try:
+        site = get_site_from_dbname(dbname)
+    except RuntimeWarning as exception:
+        LOG.warning(f'Cannot instantiate a site object for {dbname} due to exception {exception}; skip job "process_redirects_without_badge" for project')
+        return
 
     filt = df['redirect_id'].notna() & df['target_id'].notna() & df['target_qid'].notna() & df['s2r_badge'].isna() & df['i2r_badge'].isna()
     for row in df.loc[filt].itertuples():
