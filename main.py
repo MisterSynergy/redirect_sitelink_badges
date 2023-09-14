@@ -84,9 +84,6 @@ def query_mediawiki(database:str, query:str, params:Optional[tuple[Any]]=None) -
         result = db_cursor.fetchall()
 
         for row in result:
-            for key, value in row.items():  # binary fields need to be converted to string
-                if isinstance(value, bytes) or isinstance(value, bytearray):
-                    row[key] = value.decode('utf8')
             yield row
 
 
@@ -96,11 +93,6 @@ def query_mediawiki_to_dataframe(database:str, query:str) -> pd.DataFrame:
         result = db_cursor.fetchall()
 
     df = pd.DataFrame(data=result)
-
-    for column in df.columns:
-        if not pd.api.types.is_string_dtype(df[column]):
-            continue
-        df[column] = df[column].str.decode('utf8')
 
     return df
 
@@ -170,16 +162,16 @@ def query_namespaces_from_api(url:str) -> dict[int, dict[str, str]]:
 
 def query_redirect_pages_linked_to_wikidata_item(database:str='enwiki') -> pd.DataFrame:
     query = """SELECT
-  redirect_page.page_id AS redirect_id,
+  CONVERT(redirect_page.page_id USING utf8) AS redirect_id,
   redirect_page.page_namespace AS redirect_namespace,
-  redirect_page.page_title AS redirect_title,
-  redirect_pp.pp_value AS redirect_qid,
+  CONVERT(redirect_page.page_title USING utf8) AS redirect_title,
+  CONVERT(redirect_pp.pp_value USING utf8) AS redirect_qid,
   rd_namespace AS target_namespace,
-  rd_title AS target_title,
-  rd_fragment AS target_fragment,
-  rd_interwiki AS target_interwiki,
+  CONVERT(rd_title USING utf8) AS target_title,
+  CONVERT(rd_fragment USING utf8) AS target_fragment,
+  CONVERT(rd_interwiki USING utf8) AS target_interwiki,
   target_page.page_id AS target_id,
-  target_pp.pp_value AS target_qid
+  CONVERT(target_pp.pp_value USING utf8) AS target_qid
 FROM
   page AS redirect_page
     JOIN page_props AS redirect_pp ON (redirect_page.page_id=redirect_pp.pp_page AND redirect_pp.pp_propname='wikibase_item')
@@ -502,7 +494,7 @@ def touch_pages(qid:str, dbname:str, site:Optional[pwb.Site]=None) -> None:
     params = (qid,)
     query = f"""SELECT
   page_namespace,
-  page_title
+  CONVERT(page_title USING utf8) AS page_title
 FROM
   page
     JOIN page_props ON page_id=pp_page AND pp_propname='wikibase_item'
