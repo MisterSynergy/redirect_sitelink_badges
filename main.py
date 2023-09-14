@@ -10,7 +10,7 @@ import pandas as pd
 import pywikibot as pwb
 from pywikibot.exceptions import NoPageError, OtherPageSaveError, IsRedirectPageError, CircularRedirectError, \
     InterwikiRedirectPageError, APIError, CascadeLockedPageError, LockedPageError, NoUsernameError, \
-    TitleblacklistError
+    TitleblacklistError, UnknownSiteError
 import requests
 import mariadb
 
@@ -536,7 +536,11 @@ def touch_page(page:pwb.Page) -> None:
 
 
 def get_site_from_dbname(dbname:str) -> pwb.Site:
-    site = pwb.APISite.fromDBName(dbname)
+    try:
+        site = pwb.APISite.fromDBName(dbname)
+    except UnknownSiteError as exception:
+        LOG.warning(exception)
+        raise RuntimeWarning(f'Unknown site for dbname {dbname}') from exception
     try:
         site.login(autocreate=True)
     except NoUsernameError as exception:
