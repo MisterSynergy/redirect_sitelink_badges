@@ -822,7 +822,11 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
     elif dbname in [ 'commonswiki', 'mediawikiwiki', 'metawiki', 'specieswiki', 'simplewiki' ]:
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(dbname, "")}'
     else:
-        redirect_site = pwb.APISite.fromDBName(dbname)
+        try:
+            redirect_site = pwb.APISite.fromDBName(dbname)
+        except UnknownSiteError as exception:
+            LOG.warning(exception)
+            return  # ignore in report
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(redirect_site.family, "w:")}{redirect_site.lang}:'
 
     namespaces = query_namespaces_from_api(url)
