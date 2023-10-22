@@ -404,7 +404,7 @@ def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
     return len(local_page.text)
 
 
-def sitelink_has_any_of_badges(sitelink:pwb.ItemSiteLinkPage, has_none_of_badges:list[str]) -> bool:
+def sitelink_has_any_of_badges(sitelink:pwb.SiteLink, has_none_of_badges:list[str]) -> bool:
     if not sitelink.badges:
         return False
 
