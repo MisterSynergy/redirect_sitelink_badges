@@ -404,7 +404,20 @@ def get_page_len(item:pwb.ItemPage, dbname:str) -> int:
     return len(local_page.text)
 
 
-def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) -> None:
+def sitelink_has_any_of_badges(sitelink:pwb.ItemSiteLinkPage, has_none_of_badges:list[str]) -> bool:
+    if not sitelink.badges:
+        return False
+
+    sitelink_badge_qids = [ badge_item.title() for badge_item in sitelink.badges ]
+
+    for qid_badge in has_none_of_badges:
+        if qid_badge in sitelink_badge_qids:
+            return True
+
+    return False
+
+
+def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str, has_none_of_badges:Optional[list[str]]=None) -> None:
     if qid_badge not in [ QID_S2R, QID_I2R ]:
         raise RuntimeError(f'Invalid badge {qid_badge} provided for {dbname} in {item.title()}')
 
@@ -415,6 +428,9 @@ def add_badge(item:pwb.ItemPage, dbname:str, qid_badge:str, edit_summary:str) ->
 
     if qid_badge in [ badge_item_page.title() for badge_item_page in sitelink.badges ]:
         raise RuntimeWarning(f'Badge to add {qid_badge} already set for {dbname} sitelink in {item.title()}')
+
+    if has_none_of_badges is not None and sitelink_has_any_of_badges(sitelink, has_none_of_badges):
+        raise RuntimeWarning(f'Sitelink does already have an incompatible badge for {dbname} sitelink in {item.title()}; badge to add {qid_badge} omitted')
 
     new_badges = [
         *sitelink.badges,
@@ -592,7 +608,8 @@ def process_redirects_with_inexistent_target(df:pd.DataFrame, dbname:Optional[st
                     item,
                     dbname,
                     QID_S2R,
-                    f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details'
+                    f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details',
+                    [ QID_I2R ]
                 )
             except RuntimeWarning as exception:
                 LOG.warning(f'Edit failed in {item.title()}, {dbname} sitelink: {exception}')
@@ -661,7 +678,8 @@ def process_redirects_without_badge(df:pd.DataFrame, dbname:Optional[str]=None) 
                 item,
                 dbname,
                 QID_S2R,
-                f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details'
+                f'add badge [[{QID_S2R}]] to {dbname} sitelink; see [[Wikidata:Sitelinks to redirects]] for details',
+                [ QID_I2R ]
             )
         except RuntimeWarning as exception:
             touch_pages(item.title(), dbname, site)
