@@ -97,18 +97,34 @@ def query_mediawiki_to_dataframe(database:str, query:str) -> pd.DataFrame:
     return df
 
 
+def query_wdqs(query:str, retries:int=3) -> str:
+    response = requests.post(
+        url=WDQS_ENDPOINT,
+        data={ 'query' : query },
+        headers={
+            'User-Agent': WDQS_USER_AGENT,
+            'Accept' : 'text/csv'
+        }
+    )
+
+    if response.status_code not in [ 200 ]:
+        if retries > 0:
+            retries -= 1
+            sleep(5)
+            return query_wdqs(query, retries)
+
+        raise RuntimeError(f'Cannot query WDQS; status code {response.status_code}; query time {response.elapsed.total_seconds():.2f} sec')
+
+    payload = response.text
+
+    return payload
+
+
 def query_wdqs_to_dataframe(query:str, columns:dict[str, Any]) -> pd.DataFrame:
+    wdqs_payload = query_wdqs(query)
+
     df = pd.read_csv(
-        StringIO(
-            requests.post(
-                url=WDQS_ENDPOINT,
-                data={ 'query' : query },
-                headers={
-                    'User-Agent': WDQS_USER_AGENT,
-                    'Accept' : 'text/csv'
-                }
-            ).text
-        ),
+        StringIO(wdqs_payload),
         header=0,
         names=list(columns.keys()),
         dtype=columns
@@ -954,7 +970,7 @@ def log_project_stats(payload:dict[str, int], dbname:Optional[str]=None) -> None
 def process_project(project:dict[str, str]) -> None:
     try:
         df = make_master_df(project.get('db_name'), project.get('url'))
-    except RuntimeWarning as exception:
+    except (RuntimeWarning, RuntimeError) as exception:
         LOG.warning(f'Cannot process project {project} due to exception: {exception}')
         return
 
