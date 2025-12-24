@@ -569,7 +569,7 @@ def touch_page(page:pwb.Page) -> None:
 
 def get_site_from_dbname(dbname:str) -> pwb.Site:
     try:
-        site = pwb.APISite.fromDBName(dbname)
+        site = pwb.site._apisite.APISite.fromDBName(dbname)
     except UnknownSiteError as exception:
         LOG.warning(exception)
         raise RuntimeWarning(f'Unknown site for dbname {dbname}') from exception
@@ -857,7 +857,7 @@ def write_unconnected_redirect_target_report(df:pd.DataFrame, dbname:Optional[st
         redirect_interwiki_prefix = f':{FAMILY_SHORTCUTS.get(dbname, "")}'
     else:
         try:
-            redirect_site = pwb.APISite.fromDBName(dbname)
+            redirect_site = pwb.site._apisite.APISite.fromDBName(dbname)
         except UnknownSiteError as exception:
             LOG.warning(exception)
             return  # ignore in report
